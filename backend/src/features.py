@@ -8,18 +8,12 @@ from io import BytesIO
 import os
 
 class FeatureExtractor:
-    """
-    Extract three types of features for AI image detection:
-    1. CLIP features (768-dim) - semantic/visual features
-    2. Frequency features (4-dim) - spectral domain analysis
-    3. Compression features (3-dim) - statistical properties
-    """
     
     def __init__(self, device='cuda' if torch.cuda.is_available() else 'cpu'):
         self.device = device
         print(f"Initializing FeatureExtractor on {device}...")
         
-        # Load CLIP model (frozen)
+        # Load CLIP model
         print("Loading CLIP model...")
         self.clip_model, _, self.preprocess = open_clip.create_model_and_transforms(
             'ViT-L-14',
@@ -28,7 +22,7 @@ class FeatureExtractor:
         self.clip_model = self.clip_model.to(device)
         self.clip_model.eval()
         
-        # Freeze CLIP parameters (we never train it)
+        # Freeze CLIP parameters
         for param in self.clip_model.parameters():
             param.requires_grad = False
         
@@ -43,15 +37,7 @@ class FeatureExtractor:
     
     @torch.no_grad()
     def extract_clip_features(self, image):
-        """
-        Extract CLIP image features (768-dim)
-        
-        Args:
-            image: PIL Image or torch.Tensor
-            
-        Returns:
-            torch.Tensor: (768,) normalized CLIP features
-        """
+
         # Preprocess image
         if isinstance(image, Image.Image):
             image = self.preprocess(image).unsqueeze(0).to(self.device)
@@ -63,23 +49,13 @@ class FeatureExtractor:
         # Extract features
         features = self.clip_model.encode_image(image)
         
-        # Normalize (CLIP was trained with normalized features)
+        # Normalize
         features = features / features.norm(dim=-1, keepdim=True)
         
         return features.squeeze().cpu()
     
     def extract_frequency_features(self, image):
-        """
-        Extract frequency domain features (4-dim)
-        Analyzes the FFT spectrum to detect GAN/diffusion artifacts
-        
-        Args:
-            image: PIL Image or numpy array
-            
-        Returns:
-            np.ndarray: (4,) frequency features
-                [low_freq_energy, mid_freq_energy, high_freq_energy, phase_coherence]
-        """
+
         # Convert to numpy array
         if isinstance(image, Image.Image):
             img_array = np.array(image)
@@ -111,9 +87,9 @@ class FeatureExtractor:
         normalized_distance = distance_from_center / max_distance
         
         # Define frequency bands
-        # Low: 0-15% of max distance (DC and very low frequencies)
-        # Mid: 15-50% (where GAN artifacts often appear)
-        # High: 50-100% (fine details)
+        # Low: 0-15% of max distance
+        # Mid: 15-50%
+        # High: 50-100%
         low_mask = normalized_distance < 0.15
         mid_mask = (normalized_distance >= 0.15) & (normalized_distance < 0.5)
         high_mask = normalized_distance >= 0.5
@@ -125,7 +101,6 @@ class FeatureExtractor:
         
         # Phase coherence: measure of phase uniformity
         # Higher values = less coherent = more natural
-        # AI images often have too-coherent phase
         phase_grad_y = np.gradient(phase, axis=0)
         phase_grad_x = np.gradient(phase, axis=1)
         phase_coherence = np.sqrt(phase_grad_y**2 + phase_grad_x**2).mean()
@@ -139,23 +114,12 @@ class FeatureExtractor:
         ], dtype=np.float32)
         
         # Apply log transform to reduce scale
-        # This brings values from ~10000 range down to ~10 range
         features = np.log1p(features)  # log(1 + x) to handle zeros
         
         return features
     
     def extract_compression_features(self, image):
-        """
-        Extract compression-based features (3-dim)
-        AI images often compress differently than natural images
-        
-        Args:
-            image: PIL Image
-            
-        Returns:
-            np.ndarray: (3,) compression features
-                [png_ratio, entropy, jpeg_ratio]
-        """
+
         # Ensure PIL Image
         if not isinstance(image, Image.Image):
             image = Image.fromarray(image)
@@ -178,7 +142,7 @@ class FeatureExtractor:
         # Feature 2: Shannon entropy (information content)
         # Measures randomness/complexity of the image
         def compute_entropy(img_channel):
-            """Compute Shannon entropy of a single channel"""
+
             # Compute histogram
             hist, _ = np.histogram(img_channel.flatten(), bins=256, range=(0, 256))
             
@@ -220,14 +184,7 @@ class FeatureExtractor:
         return features
     
     def fit_normalizers(self, image_paths, max_samples=1000):
-        """
-        Compute normalization statistics from training data
-        Call this once before training on a sample of your training images
-        
-        Args:
-            image_paths: List of image file paths
-            max_samples: Maximum number of samples to use for statistics
-        """
+
         print(f"\nFitting normalizers on {min(len(image_paths), max_samples)} images...")
         
         freq_features_list = []
@@ -272,15 +229,7 @@ class FeatureExtractor:
         print(f"  Compression - Mean: {self.comp_mean}, Std: {self.comp_std}")
     
     def extract_all_features(self, image_path):
-        """
-        Extract all features (CLIP + Frequency + Compression) for an image
-        
-        Args:
-            image_path: Path to image file OR PIL Image
-            
-        Returns:
-            torch.Tensor: (775,) combined feature vector
-        """
+
         # Load image if path provided
         if isinstance(image_path, str):
             if not os.path.exists(image_path):
@@ -318,7 +267,7 @@ class FeatureExtractor:
         return all_features
     
     def save_normalizers(self, path):
-        """Save normalization statistics to file"""
+
         if not self.is_fitted:
             raise ValueError("Normalizers not fitted yet. Call fit_normalizers() first.")
         

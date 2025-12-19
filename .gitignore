@@ -71,3 +71,5 @@ pnpm-debug.log*
 *.tsbuildinfo
 
 data/
+test_gpu.py
+checkpoints/

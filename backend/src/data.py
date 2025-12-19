@@ -91,12 +91,7 @@ class TestingDataset(Dataset):
     """
     
     def __init__(self, root_dir, model_name, max_samples=None):
-        """
-        Args:
-            root_dir: Path to data/testing
-            model_name: Specific model to test (e.g., 'biggan', 'stylegan')
-            max_samples: Max images to load (None = all)
-        """
+        
         self.samples = []
         self.labels = []
         
