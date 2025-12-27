@@ -73,3 +73,5 @@ pnpm-debug.log*
 data/
 test_gpu.py
 checkpoints/
+convert.py
+results/

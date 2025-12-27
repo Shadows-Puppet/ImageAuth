@@ -1,7 +1,7 @@
 # extract_features.py
 
 from features import FeatureExtractor
-from data import UniversalFakeDetectDataset
+from data import HuggingFaceDataset
 
 import torch
 import os
@@ -25,14 +25,15 @@ def extract_clip_batch(extractor, device, batch_items):
     pil_images = []
     labels = []
 
-    for path, label in batch_items:
+    for img, label in batch_items:
         try:
-            img = Image.open(path).convert("RGB").resize((256, 256), Image.BILINEAR)
+            # Resize the image
+            img = img.resize((256, 256), Image.BILINEAR)
             tensors.append(extractor.preprocess(img))
             pil_images.append(img)
             labels.append(label)
         except Exception as e:
-            print(f"Warning: failed to load {path}: {e}")
+            print(f"Warning: failed to process image: {e}")
 
     if not tensors:
         return None, None, None
@@ -115,25 +116,26 @@ def main():
     batch_size = 32
     cpu_workers = min(8, os.cpu_count() or 4)
 
+    dataset_path = "../data/new" 
+
     print("=" * 60)
-    print("FAST BATCHED FEATURE EXTRACTION (WINDOWS SAFE)")
+    print("FAST BATCHED FEATURE EXTRACTION (HuggingFace Datasets)")
     print("=" * 60)
 
     print("\nInitializing feature extractor...")
     extractor = FeatureExtractor(device=device)
-
     extractor.load_normalizers("checkpoints/normalizers.npz")
-
-    print("\nWarming up...")
+    print("\nWarming up GPU...")
     dummy = Image.new("RGB", (256, 256))
     extractor.extract_clip_features(dummy)
     torch.cuda.synchronize()
     print("✓ Warmup complete")
 
     print("\nLoading datasets...")
-    train_dataset = UniversalFakeDetectDataset("../data/training")
-    eval_dataset = UniversalFakeDetectDataset("../data/eval")
+    train_dataset = HuggingFaceDataset(dataset_path, split='train')
+    eval_dataset = HuggingFaceDataset(dataset_path, split='eval')
 
+    # Extract features for each split
     extract_and_save_batched(
         extractor,
         train_dataset,
@@ -152,7 +154,11 @@ def main():
         cpu_workers,
     )
 
-    print("\nDONE")
+    print("\nDONE! ✓✓✓")
+    print("\nGenerated files:")
+    print("  - data/features/train_features.npz")
+    print("  - data/features/eval_features.npz")
+    print("  - data/features/test_features.npz")
 
 
 if __name__ == "__main__":

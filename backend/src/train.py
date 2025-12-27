@@ -24,10 +24,8 @@ class PreExtractedFeaturesDataset(Dataset):
         self.features = torch.from_numpy(data['features']).float()
         self.labels = torch.from_numpy(data['labels']).long()
         
-        
         print(f"  ✓ Loaded {len(self.features)} samples")
         print(f"  ✓ Feature shape: {self.features.shape}")
-        print(f"  ✓ Label distribution: {self.labels.sum().item()} fake, {(self.labels == 0).sum().item()} real")
     
     def __len__(self):
         return len(self.features)
@@ -99,8 +97,7 @@ def train():
     # Configuration
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     batch_size = 256
-    # model is really powerful so 1 epoch is enough to get good results and avoid overfitting
-    num_epochs = 1 
+    num_epochs = 20
 
     learning_rate = 1e-4
     hidden_dim = 256
@@ -161,12 +158,6 @@ def train():
     # Training setup
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    '''scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer,
-        mode='max',
-        factor=0.5,
-        patience=3
-    )'''
     
     # Training history
     history = {
@@ -237,9 +228,6 @@ def train():
         history['val_auc'].append(val_auc)
         history['val_ap'].append(val_ap)
         history['learning_rates'].append(optimizer.param_groups[0]['lr'])
-        
-        # Learning rate scheduling
-        #scheduler.step(val_acc)
         
         # Print epoch results
         print(f"\nEpoch {epoch+1}/{num_epochs}:")
@@ -351,8 +339,7 @@ def plot_training_curves(history, num_epochs):
     plt.savefig('results/training_curves.png', dpi=150, bbox_inches='tight')
     print("✓ Saved training curves to results/training_curves.png")
     
-    # Show plot
-    plt.show()
+    plt.close()
 
 def main():
     start_time = datetime.now()

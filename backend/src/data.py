@@ -1,150 +1,117 @@
-import os
+# data.py
+
+from datasets import load_from_disk, Dataset as HFDataset
 from torch.utils.data import Dataset
 from PIL import Image
-import random
+import os
 
-class UniversalFakeDetectDataset(Dataset):
+class HuggingFaceDataset(Dataset):
     """
-    Dataset for UniversalFakeDetect structure:
-    data/training/[class]/0_real/*.png
-    data/training/[class]/1_fake/*.png
+    Wrapper for HuggingFace datasets to work with PyTorch DataLoader
     """
-    
-    def __init__(self, root_dir, max_samples_per_class=None, seed=42):
+    def __init__(self, dataset_path, split='train'):
         """
         Args:
-            root_dir: Path to data/training or data/testing
-            max_samples_per_class: Max images to load per class (None = all)
-            seed: Random seed for reproducibility
+            dataset_path: Path to the saved HuggingFace dataset directory (parent folder)
+            split: Which split to use ('train', 'eval', or 'test')
         """
-        self.samples = []
-        self.labels = []
+        print(f"Loading {split} split from {dataset_path}...")
         
-        random.seed(seed)
+        # Check if this is a split subfolder or parent folder
+        split_path = os.path.join(dataset_path, split)
         
-        # Get all class directories
-        if not os.path.exists(root_dir):
-            raise ValueError(f"Directory not found: {root_dir}")
-        
-        classes = [d for d in os.listdir(root_dir) 
-                  if os.path.isdir(os.path.join(root_dir, d))]
-        
-        print(f"Found {len(classes)} classes: {classes[:5]}...")
-        
-        total_real = 0
-        total_fake = 0
-        
-        for class_name in classes:
-            class_dir = os.path.join(root_dir, class_name)
+        if os.path.exists(split_path):
+            # Load from the specific split subfolder
+            print(f"  Loading from subfolder: {split_path}")
+            self.dataset = load_from_disk(split_path)
+        else:
+            # Try loading as DatasetDict and selecting split
+            full_dataset = load_from_disk(dataset_path)
             
-            # Real images (0_real)
-            real_dir = os.path.join(class_dir, '0_real')
-            if os.path.exists(real_dir):
-                real_files = [f for f in os.listdir(real_dir) 
-                             if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-                
-                # Limit samples if requested
-                if max_samples_per_class:
-                    real_files = random.sample(real_files, 
-                                              min(len(real_files), max_samples_per_class))
-                
-                for fname in real_files:
-                    self.samples.append(os.path.join(real_dir, fname))
-                    self.labels.append(0)  # 0 = real
-                
-                total_real += len(real_files)
-            
-            # Fake images (1_fake)
-            fake_dir = os.path.join(class_dir, '1_fake')
-            if os.path.exists(fake_dir):
-                fake_files = [f for f in os.listdir(fake_dir)
-                             if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-                
-                # Limit samples if requested
-                if max_samples_per_class:
-                    fake_files = random.sample(fake_files,
-                                              min(len(fake_files), max_samples_per_class))
-                
-                for fname in fake_files:
-                    self.samples.append(os.path.join(fake_dir, fname))
-                    self.labels.append(1)  # 1 = fake
-                
-                total_fake += len(fake_files)
+            # Check if it's a DatasetDict or a single Dataset
+            if hasattr(full_dataset, 'keys'):
+                # It's a DatasetDict
+                if split not in full_dataset:
+                    raise ValueError(f"Split '{split}' not found. Available splits: {list(full_dataset.keys())}")
+                self.dataset = full_dataset[split]
+            else:
+                # It's a single Dataset - assume it's the requested split
+                print(f"  Loaded as single dataset (no split structure)")
+                self.dataset = full_dataset
         
-        print(f"Loaded {total_real} real and {total_fake} fake images")
-        print(f"Total samples: {len(self.samples)}")
+        print(f"✓ Loaded {len(self.dataset)} samples from {split} split")
+        
+        # Determine the column names (adjust these based on your dataset)
+        self.image_column = self._find_image_column()
+        self.label_column = self._find_label_column()
+        
+        print(f"  Using image column: '{self.image_column}'")
+        print(f"  Using label column: '{self.label_column}'")
+    
+    def _find_image_column(self):
+        """Auto-detect the image column name"""
+        possible_names = ['image', 'img', 'images', 'picture', 'photo']
+        for name in possible_names:
+            if name in self.dataset.column_names:
+                return name
+        # If none found, use first column
+        return self.dataset.column_names[0]
+    
+    def _find_label_column(self):
+        """Auto-detect the label column name"""
+        possible_names = ['binary_label', 'label', 'class', 'target', 'y']
+        for name in possible_names:
+            if name in self.dataset.column_names:
+                return name
+        # If none found, raise error
+        raise ValueError(f"Could not find label column. Available columns: {self.dataset.column_names}")
     
     def __len__(self):
-        return len(self.samples)
+        return len(self.dataset)
     
     def __getitem__(self, idx):
-        img_path = self.samples[idx]
-        label = self.labels[idx]
-        return img_path, label
+        """
+        Returns:
+            tuple: (image, label) where image is a PIL Image and label is an integer
+        """
+        sample = self.dataset[idx]
+        
+        # Get the image (can be PIL Image, dict, or array)
+        image = sample[self.image_column]
+        
+        # Handle different image formats
+        if isinstance(image, Image.Image):
+            # Already a PIL Image
+            pass
+        elif isinstance(image, dict):
+            # Image stored as dict (common in HuggingFace datasets)
+            # Usually has 'bytes' or 'path' key
+            if 'bytes' in image:
+                from io import BytesIO
+                image = Image.open(BytesIO(image['bytes']))
+            elif 'path' in image:
+                image = Image.open(image['path'])
+            elif 'array' in image:
+                import numpy as np
+                image = Image.fromarray(np.array(image['array']))
+            else:
+                raise ValueError(f"Unknown image dict format: {image.keys()}")
+        elif hasattr(image, '__array_interface__') or hasattr(image, '__array__'):
+            # NumPy array or array-like
+            import numpy as np
+            image = Image.fromarray(np.array(image))
+        else:
+            raise ValueError(f"Unknown image format: {type(image)}")
+        
+        # Ensure RGB format
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+        
+        # Get the label
+        label = sample[self.label_column]
+        
+        return image, label
 
 
-class TestingDataset(Dataset):
-    """
-    Dataset for testing structure:
-    data/testing/[model]/0_real/*.png
-    data/testing/[model]/1_fake/*.png
-    """
-    
-    def __init__(self, root_dir, model_name, max_samples=None):
-        
-        self.samples = []
-        self.labels = []
-        
-        model_dir = os.path.join(root_dir, model_name)
-        
-        if not os.path.exists(model_dir):
-            raise ValueError(f"Model directory not found: {model_dir}")
-        
-        print(f"Loading test data for model: {model_name}")
-        
-        # Real images
-        real_dir = os.path.join(model_dir, '0_real')
-        if os.path.exists(real_dir):
-            real_files = [f for f in os.listdir(real_dir)
-                         if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-            
-            if max_samples:
-                real_files = real_files[:max_samples]
-            
-            for fname in real_files:
-                self.samples.append(os.path.join(real_dir, fname))
-                self.labels.append(0)
-        
-        # Fake images
-        fake_dir = os.path.join(model_dir, '1_fake')
-        if os.path.exists(fake_dir):
-            fake_files = [f for f in os.listdir(fake_dir)
-                         if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-            
-            if max_samples:
-                fake_files = fake_files[:max_samples]
-            
-            for fname in fake_files:
-                self.samples.append(os.path.join(fake_dir, fname))
-                self.labels.append(1)
-        
-        print(f"Loaded {len([l for l in self.labels if l == 0])} real "
-              f"and {len([l for l in self.labels if l == 1])} fake images")
-    
-    def __len__(self):
-        return len(self.samples)
-    
-    def __getitem__(self, idx):
-        img_path = self.samples[idx]
-        label = self.labels[idx]
-        return img_path, label
-
-
-def get_test_models(test_dir='../data/testing'):
-    """Get list of available test models"""
-    if not os.path.exists(test_dir):
-        return []
-    
-    models = [d for d in os.listdir(test_dir)
-             if os.path.isdir(os.path.join(test_dir, d))]
-    return models
+# For backwards compatibility, keep the old class name
+UniversalFakeDetectDataset = HuggingFaceDataset
