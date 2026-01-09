@@ -75,3 +75,4 @@ test_gpu.py
 checkpoints/
 convert.py
 results/
+secrets/
