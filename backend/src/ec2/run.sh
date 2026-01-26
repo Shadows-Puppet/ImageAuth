@@ -11,7 +11,7 @@ docker rm job-api 2>/dev/null
 docker run -d \
   --name job-api \
   -p 80:8000 \
-  -e AWS_REGION=us-east-1 \
+  -e AWS_REGION=us-east-2 \
   -v ${SCRIPT_DIR}/secrets/s3_bucket.txt:/run/secrets/s3_bucket:ro \
   -v ${SCRIPT_DIR}/secrets/job_queue_url.txt:/run/secrets/job_queue_url:ro \
   --restart unless-stopped \

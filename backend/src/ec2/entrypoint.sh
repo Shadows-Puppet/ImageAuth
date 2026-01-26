@@ -2,7 +2,7 @@
 set -e
 
 # Set AWS region directly
-export AWS_REGION=us-east-1
+export AWS_REGION=us-east-2
 
 # Read Docker secrets and export as environment variables
 if [ -f /run/secrets/s3_bucket ]; then

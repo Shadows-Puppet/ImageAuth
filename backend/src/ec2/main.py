@@ -1,11 +1,20 @@
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 import json
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
 import uuid
 import os
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Get configuration from environment
 AWS_REGION = os.getenv("AWS_REGION", "us-east-2")
@@ -19,7 +28,7 @@ sqs_client = None
 def get_s3_client():
     global s3_client
     if s3_client is None:
-        s3_client = boto3.client("s3", region_name=AWS_REGION)
+        s3_client = boto3.client("s3", region_name=AWS_REGION, config=Config(signature_version='s3v4'))
     return s3_client
 
 def get_sqs_client():
