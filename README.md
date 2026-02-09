@@ -1,9 +1,11 @@
 # AI-Generated Image Detection Tool
 
+![Coverage](https://codecov.io/gh/Shadows-Puppet/ImageAuth/branch/main/graph/badge.svg)
+
 ## Overview
 This project is a web-based tool for detecting AI-generated images using a **hybrid detection pipeline** that combines semantic, statistical, and signal-level analysis techniques. The goal is to improve robustness and generalization by avoiding reliance on a single detection method.
 
-The system consists of a **React frontend**, a **FastAPI backend**, and multiple image analysis modules, with planned cloud deployment on **AWS**.
+The system consists of a **React frontend**, a **FastAPI backend**, and multiple image analysis modules, hosted on **AWS** and can be accessed at [https://imageauth.dev](https://imageauth.dev).
 
 ---
 
@@ -27,7 +29,7 @@ The system consists of a **React frontend**, a **FastAPI backend**, and multiple
 
 React (Vite + TypeScript)
 ↓
-FastAPI Server
+FastAPI Server (AWS EC2)
 ↓
 Detection Pipeline
 ├─ CLIP-based analysis
@@ -51,17 +53,15 @@ Detection Pipeline
 - PyTorch
 - CLIP
 
-**Planned / Optional**
+**Infrastructure / Deployment**
+- AWS EC2 (server)
+- AWS S3 (image storage)
+- AWS SQS (job scheduling)
+- Local GPU worker (inference)
+- Docker (portability and scalability)
+
+**Planned**
 - ZED (Zero-shot Entropy-based Detection)
-- AWS (EC2, S3, local GPU for training and inference)
-
----
-
-## Deployment
-Planned deployment targets AWS:
-- **EC2** for backend inference (CPU or GPU depending on model configuration)
-- **S3** for image storage
-- **Docker**: Docker-based deployment for portability and scalability
 
 ---
 
